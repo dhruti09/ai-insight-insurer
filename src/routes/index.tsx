@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, ClientOnly } from "@tanstack/react-router";
 import { useMemo } from "react";
 import {
   Bar,
@@ -122,6 +122,7 @@ function Dashboard() {
       </div>
 
       {/* Charts */}
+      <ClientOnly fallback={<div className="h-[300px] rounded-lg border bg-card" />}>
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Lead Priority Distribution</CardTitle></CardHeader>
@@ -183,6 +184,7 @@ function Dashboard() {
           </CardContent>
         </Card>
       </div>
+      </ClientOnly>
     </div>
   );
 }
