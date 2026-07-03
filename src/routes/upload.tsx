@@ -21,9 +21,16 @@ export const Route = createFileRoute("/upload")({
   component: UploadPage,
 });
 
-// Configure the backend endpoint via env; falls back to same-origin /api/leads/upload
+// Configure the backend endpoint via env; defaults to the local FastAPI server.
 const UPLOAD_ENDPOINT =
-  (import.meta as any).env?.VITE_LEADS_UPLOAD_URL ?? "/api/leads/upload";
+  (import.meta as any).env?.VITE_LEADS_UPLOAD_URL ?? "http://127.0.0.1:8001/upload-leads";
+
+type UploadResult = {
+  leads: Lead[];
+  rowsUploaded?: number;
+  message?: string;
+  source: "api" | "local";
+};
 
 function UploadPage() {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -38,7 +45,7 @@ function UploadPage() {
   function normalizeApiLeads(payload: any): Lead[] {
     const rows: any[] = Array.isArray(payload)
       ? payload
-      : payload?.leads ?? payload?.data ?? payload?.results ?? [];
+      : payload?.records ?? payload?.leads ?? payload?.data ?? payload?.results ?? [];
     if (!Array.isArray(rows)) return [];
     return rows.map((r, i) => {
       // If API already returns a fully-scored Lead, trust it; otherwise score locally
@@ -49,54 +56,61 @@ function UploadPage() {
     });
   }
 
-  async function uploadViaApi(file: File): Promise<Lead[]> {
+  async function uploadViaApi(file: File): Promise<UploadResult> {
     const form = new FormData();
     form.append("file", file, file.name);
     const res = await fetch(UPLOAD_ENDPOINT, { method: "POST", body: form });
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      throw new Error(`Upload failed (${res.status}) ${text.slice(0, 200)}`);
-    }
     const ct = res.headers.get("content-type") ?? "";
     const payload = ct.includes("application/json") ? await res.json() : await res.text();
-    return normalizeApiLeads(payload);
+
+    if (!res.ok) {
+      const detail = typeof payload === "string" ? payload : payload?.detail ?? payload?.message ?? "";
+      throw new Error(`Upload failed (${res.status}) ${String(detail).slice(0, 200)}`);
+    }
+
+    if (payload && typeof payload === "object" && payload.success === false) {
+      throw new Error(payload.message ?? "API rejected the upload.");
+    }
+
+    return {
+      leads: normalizeApiLeads(payload),
+      rowsUploaded: payload?.rows_uploaded,
+      message: payload?.message,
+      source: "api",
+    };
   }
 
-  async function parseLocally(file: File): Promise<Lead[]> {
+  async function parseLocally(file: File): Promise<UploadResult> {
     const buf = await file.arrayBuffer();
     const wb = XLSX.read(buf, { type: "array" });
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const rows: Record<string, any>[] = XLSX.utils.sheet_to_json(sheet, { defval: "" });
     if (!rows.length) throw new Error("No rows found in the file.");
-    return rows.map((r, i) => leadFromRow(r, i));
+    return { leads: rows.map((r, i) => leadFromRow(r, i)), source: "local" };
   }
 
   async function handleFile(file: File) {
     setStatus("processing");
     setMessage(useApi ? `Uploading ${file.name} to ${UPLOAD_ENDPOINT}…` : `Reading ${file.name}…`);
     try {
-      const newLeads = useApi ? await uploadViaApi(file) : await parseLocally(file);
+      const result = useApi ? await uploadViaApi(file) : await parseLocally(file);
+      const newLeads = result.leads;
       if (!newLeads.length) throw new Error("No leads returned.");
       leadsStore.add(newLeads);
       setPreview(newLeads.slice(0, 5));
       setStatus("success");
-      setMessage(`Successfully imported ${newLeads.length} leads from ${file.name}.`);
+      setMessage(
+        result.source === "api"
+          ? `Uploaded ${result.rowsUploaded ?? newLeads.length} leads to Google Sheets from ${file.name}.`
+          : `Parsed ${newLeads.length} leads locally from ${file.name}. Google Sheets was not updated.`,
+      );
     } catch (e: any) {
-      // Auto-fallback to local parsing if the API is unreachable
-      if (useApi) {
-        try {
-          const fallback = await parseLocally(file);
-          leadsStore.add(fallback);
-          setPreview(fallback.slice(0, 5));
-          setStatus("success");
-          setMessage(`API unavailable — parsed ${fallback.length} leads locally. (${e?.message ?? "network error"})`);
-          return;
-        } catch {
-          /* fallthrough to error */
-        }
-      }
       setStatus("error");
-      setMessage(e?.message ?? "Failed to process file.");
+      setMessage(
+        useApi
+          ? `Google Sheets upload failed. ${e?.message ?? "Failed to reach the backend API."}`
+          : e?.message ?? "Failed to process file.",
+      );
     }
   }
 

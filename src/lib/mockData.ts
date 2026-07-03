@@ -157,21 +157,21 @@ export function leadFromRow(row: Record<string, any>, index: number): Lead {
   };
 
   const base = {
-    leadId: String(get(["leadId", "id"], `UP-${Date.now()}-${index}`)),
-    customerName: String(get(["customerName", "name", "fullName"], `Lead ${index + 1}`)),
+    leadId: String(get(["leadId", "customerId", "customer_id", "id"], `UP-${Date.now()}-${index}`)),
+    customerName: String(get(["customerName", "name", "fullName", "full_name"], `Lead ${index + 1}`)),
     age: num(get(["age"], 35), 35),
     gender: (String(get(["gender"], "Male")).toLowerCase().startsWith("f") ? "Female" : "Male") as "Male" | "Female",
     city: String(get(["city", "location"], "Mumbai")),
-    insuranceType: (insuranceTypes.includes(String(get(["insuranceType", "type"], "Motor Insurance")) as InsuranceType)
-      ? get(["insuranceType", "type"], "Motor Insurance")
+    insuranceType: (insuranceTypes.includes(String(get(["insuranceType", "insurance_type", "type"], "Motor Insurance")) as InsuranceType)
+      ? get(["insuranceType", "insurance_type", "type"], "Motor Insurance")
       : "Motor Insurance") as InsuranceType,
-    vehicleType: (vehicleTypes.includes(String(get(["vehicleType"], "Sedan")) as VehicleType)
-      ? get(["vehicleType"], "Sedan")
+    vehicleType: (vehicleTypes.includes(String(get(["vehicleType", "vehicle_type"], "Sedan")) as VehicleType)
+      ? get(["vehicleType", "vehicle_type"], "Sedan")
       : "Sedan") as VehicleType,
-    vehicleValue: num(get(["vehicleValue", "vehicle_value"], 800000), 800000),
-    annualIncome: num(get(["annualIncome", "income"], 1000000), 1000000),
-    existingCustomer: String(get(["existingCustomer", "existing"], "no")).toLowerCase().startsWith("y") || get(["existingCustomer"], false) === true,
-    previousClaims: num(get(["previousClaims", "claims"], 0), 0),
+    vehicleValue: num(get(["vehicleValue", "vehicle_value", "sumInsured", "sum_insured_inr", "propertyValue", "property_value_inr"], 800000), 800000),
+    annualIncome: num(get(["annualIncome", "annual_income_inr", "income"], 1000000), 1000000),
+    existingCustomer: String(get(["existingCustomer", "existing_customer", "existing"], "no")).toLowerCase().startsWith("y") || get(["existingCustomer", "existing_customer"], false) === true,
+    previousClaims: num(get(["previousClaims", "no_of_previous_claims", "claims"], 0), 0),
     leadSource: "Excel Upload" as LeadSource,
     leadDate: new Date().toISOString().slice(0, 10),
   };
